@@ -33,3 +33,16 @@ coverage/
 
 # Optional
 *.tsbuildinfo
+
+# Cursor / VS Code
+.cursor/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Local History and sensitive AI logs
+.cursor/history/
+.cursor-tutor/
