@@ -43,7 +43,7 @@ interface ClientDetailViewProps {
 }
 
 type TabType = "overview" | "timeLogs" | "invoices";
-type EditMode = "none" | "company" | "billing" | "address"; // Card-level editing
+type EditMode = "none" | "company" | "billing" | "address" | "all"; // Card-level editing
 
 export const ClientDetailView = ({
   clientId,
@@ -184,6 +184,36 @@ export const ClientDetailView = ({
         };
       }
 
+      await updateClient(client.id, updates);
+      Object.assign(client, updates);
+      setEditMode("none");
+      toast.success("Changes saved successfully");
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast.error("Failed to update. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    setIsSaving(true);
+    try {
+      const updates: Partial<Client> = {
+        name: editedClient!.name,
+        hourlyRate: editedClient!.hourlyRate,
+        billingFirstName: editedClient!.billingFirstName,
+        billingLastName: editedClient!.billingLastName,
+        billingEmail: editedClient!.billingEmail,
+        billingPhone: editedClient!.billingPhone,
+        ccEmails: editedClient!.ccEmails,
+        addressStreet: editedClient!.addressStreet,
+        addressLine2: editedClient!.addressLine2,
+        addressCity: editedClient!.addressCity,
+        addressState: editedClient!.addressState,
+        addressZip: editedClient!.addressZip,
+        addressCountry: editedClient!.addressCountry,
+      };
       await updateClient(client.id, updates);
       Object.assign(client, updates);
       setEditMode("none");

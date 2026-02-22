@@ -27,7 +27,7 @@ export const TimeBlock = ({ entry, client, style, onClick, onMouseDown }: TimeBl
     <div className="text-left max-w-xs">
       <div className="font-semibold">{client?.name || 'Unknown Client'}</div>
       <div className="mt-0.5">{entry.project}</div>
-      {entry.task && <div className="text-gray-300 mt-0.5">{entry.task}</div>}
+      {entry.description && <div className="text-gray-300 mt-0.5">{entry.description}</div>}
       <div className="text-gray-400 mt-1 text-xs">{timeRange}</div>
       {isInvoiced && (
         <div className="text-green-300 mt-1 text-xs flex items-center gap-1">
@@ -76,8 +76,8 @@ export const TimeBlock = ({ entry, client, style, onClick, onMouseDown }: TimeBl
         <div className="font-bold text-sm truncate leading-tight">{entry.project}</div>
         
         {/* Task name - medium weight, slightly smaller */}
-        {entry.task && style.height > 30 && (
-          <div className="font-medium text-xs truncate leading-tight mt-0.5">{entry.task}</div>
+        {entry.description && style.height > 30 && (
+          <div className="font-medium text-xs truncate leading-tight mt-0.5">{entry.description}</div>
         )}
         
         {/* Time range - smallest and lightest */}

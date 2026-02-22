@@ -13,6 +13,7 @@ import {
   TableFooter,
 } from '../ui/table';
 import { Printer, FileText } from 'lucide-react';
+import { projectId, publicAnonKey } from '../../../config/supabase';
 
 interface InvoiceData {
   invoice: {
@@ -62,10 +63,10 @@ export const PublicInvoiceView = () => {
     const fetchInvoice = async () => {
       try {
         const response = await fetch(
-          `https://ksqwrjtjnlxojslzedyr.supabase.co/functions/v1/make-server-07ab6163/invoices/${id}/public`,
+          `https://${projectId}.supabase.co/functions/v1/make-server-07ab6163/invoices/${id}/public`,
           {
             headers: {
-              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzcXdyanRqbmx4b2pzbHplZHlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2Mzc5MzUsImV4cCI6MjA4NzIxMzkzNX0.eeHuSxuDzuRxPxOTISEHCkB85Rus6xtt7aAQqm6qsv8`,
+              Authorization: `Bearer ${publicAnonKey}`,
             },
           }
         );

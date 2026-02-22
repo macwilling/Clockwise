@@ -93,6 +93,7 @@ export const ClientForm = ({ clientId, onClose }: ClientFormProps) => {
       billingEmail: billingEmail.trim(),
       ccEmails,
       addressStreet: addressStreet.trim(),
+      addressLine2: '',
       addressCity: addressCity.trim(),
       addressState: addressState.trim(),
       addressZip: addressZip.trim(),

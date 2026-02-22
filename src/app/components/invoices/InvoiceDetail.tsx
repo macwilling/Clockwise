@@ -20,7 +20,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { projectId, publicAnonKey } from '../../../config/supabase';
 
 interface InvoiceDetailProps {
   invoiceId: string;
@@ -29,6 +29,9 @@ interface InvoiceDetailProps {
 
 export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
   const { invoices, clients, settings, updateInvoice, deleteInvoice } = useData();
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sending, setSending] = useState(false);
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
   const client = invoice ? clients.find((c) => c.id === invoice.clientId) : null;
@@ -42,7 +45,7 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
     if (invoice.status === 'draft') return 'draft';
     
     const dueDate = parseISO(invoice.dueDate);
-    if (isPast(dueDate) && invoice.status !== 'paid') {
+    if (isPast(dueDate)) {
       return 'overdue';
     }
     
@@ -106,10 +109,6 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
       </Badge>
     );
   };
-
-  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [emailMessage, setEmailMessage] = useState('');
-  const [sending, setSending] = useState(false);
 
   const handleSendEmail = async () => {
     try {

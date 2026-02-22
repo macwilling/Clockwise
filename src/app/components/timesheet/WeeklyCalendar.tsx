@@ -410,9 +410,9 @@ export const WeeklyCalendar = ({ weekDays, onEditEntry, onNewEntry, timeRange, o
                               <div className="text-[10px] opacity-75 mt-1">
                                 {timeRange}
                               </div>
-                              {entry.task && (
+                              {entry.description && (
                                 <div className="text-xs opacity-85 truncate leading-tight mt-1.5">
-                                  {entry.task}
+                                  {entry.description}
                                 </div>
                               )}
                               {entry.description && style.height >= 130 && (
@@ -497,9 +497,9 @@ export const WeeklyCalendar = ({ weekDays, onEditEntry, onNewEntry, timeRange, o
                               <div className="text-[10px] opacity-75 mt-1">
                                 {previewTimeRange}
                               </div>
-                              {draggedEntry.entry.task && (
+                              {draggedEntry.entry.description && (
                                 <div className="text-xs opacity-85 truncate leading-tight mt-1.5">
-                                  {draggedEntry.entry.task}
+                                  {draggedEntry.entry.description}
                                 </div>
                               )}
                               {draggedEntry.entry.description && previewStyle.height >= 130 && (

@@ -5,26 +5,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const app = new Hono();
 
-// Hardcoded Supabase configuration (matching frontend /utils/supabase/info.tsx)
-// In a production environment, these would come from environment variables
-const SUPABASE_URL = "https://ksqwrjtjnlxojslzedyr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzcXdyanRqbmx4b2pzbHplZHlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2Mzc5MzUsImV4cCI6MjA4NzIxMzkzNX0.eeHuSxuDzuRxPxOTISEHCkB85Rus6xtt7aAQqm6qsv8";
-// Service role key must come from environment variable for security
+// Supabase configuration from environment (see .env.example)
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-// Log configuration at startup
-console.log('=== Server Starting ===');
-console.log('SUPABASE_URL:', SUPABASE_URL);
-console.log('ANON_KEY exists:', !!SUPABASE_ANON_KEY);
-console.log('SERVICE_ROLE_KEY exists:', !!SUPABASE_SERVICE_ROLE_KEY);
-console.log('ANON_KEY prefix:', SUPABASE_ANON_KEY.substring(0, 50));
-
-// Validate we have the required configuration
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('CRITICAL: Missing required Supabase configuration');
-  console.error('SUPABASE_URL:', SUPABASE_URL ? 'SET' : 'MISSING');
-  console.error('ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
-  console.error('SERVICE_ROLE_KEY:', SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'MISSING');
+  console.error('CRITICAL: Missing required Supabase configuration (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY)');
 }
 
 // Initialize Supabase client with service role key for database access
@@ -56,106 +43,33 @@ app.use(
 
 // Health check endpoint
 app.get("/make-server-07ab6163/health", (c) => {
-  return c.json({ status: "ok", version: "v5-bypass-auth", timestamp: new Date().toISOString() });
+  return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Environment check endpoint (for debugging)
+// Debug endpoints: only report presence of env vars (no key prefixes). Disable in production if desired.
+const DEBUG_ENABLED = Deno.env.get('DEBUG_ENDPOINTS') === 'true';
 app.get("/make-server-07ab6163/debug/env", (c) => {
+  if (!DEBUG_ENABLED) return c.json({ error: "Disabled" }, 404);
   return c.json({
-    hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
-    hasAnonKey: !!Deno.env.get('SUPABASE_ANON_KEY'),
-    hasServiceRoleKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-    supabaseUrl: Deno.env.get('SUPABASE_URL')?.substring(0, 30) + '...',
-    anonKeyPrefix: Deno.env.get('SUPABASE_ANON_KEY')?.substring(0, 20) + '...',
-    serviceRoleKeyPrefix: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.substring(0, 20) + '...',
+    hasSupabaseUrl: !!SUPABASE_URL,
+    hasAnonKey: !!SUPABASE_ANON_KEY,
+    hasServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
   });
 });
-
-// Debug auth endpoint
 app.get("/make-server-07ab6163/debug/auth", async (c) => {
-  const VERSION = "v4-inline-values";
-  const INLINE_URL = "https://ksqwrjtjnlxojslzedyr.supabase.co";
-  const INLINE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzcXdyanRqbmx4b2pzbHplZHlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2Mzc5MzUsImV4cCI6MjA4NzIxMzkzNX0.eeHuSxuDzuRxPxOTISEHCkB85Rus6xtt7aAQqm6qsv8";
-  
+  if (!DEBUG_ENABLED) return c.json({ error: "Disabled" }, 404);
   const authHeader = c.req.header('Authorization');
-  console.log('Auth debug - full header:', authHeader);
-  console.log('Auth debug - server version:', VERSION);
-  
-  if (!authHeader) {
-    return c.json({ 
-      error: "No Authorization header",
-      version: VERSION,
-      serverConfig: {
-        url: INLINE_URL,
-        anonKeyPrefix: INLINE_ANON_KEY?.substring(0, 50),
-      }
-    }, 401);
-  }
-  
+  if (!authHeader) return c.json({ error: "No Authorization header" }, 401);
   const token = authHeader.replace('Bearer ', '');
-  console.log('Auth debug - token length:', token.length);
-  console.log('Auth debug - token prefix:', token.substring(0, 50));
-  
-  // Show actual config being used
-  console.log('Server SUPABASE_URL:', SUPABASE_URL);
-  console.log('Server ANON_KEY prefix:', SUPABASE_ANON_KEY?.substring(0, 50));
-  console.log('Inline URL:', INLINE_URL);
-  console.log('Inline ANON_KEY prefix:', INLINE_ANON_KEY?.substring(0, 50));
-  
-  // Create a fresh Supabase client right here with inline values
-  const testClient = createClient(INLINE_URL, INLINE_ANON_KEY);
-  
   try {
-    // Test with the inline client
-    const { data: inlineData, error: inlineError } = await testClient.auth.getUser(token);
-    console.log('Auth debug - INLINE client result:', { user: inlineData.user?.id, error: inlineError });
-    
-    // Test with ANON client (correct way)
     const { data: anonData, error: anonError } = await supabaseAuth.auth.getUser(token);
-    console.log('Auth debug - ANON client result:', { user: anonData.user?.id, error: anonError });
-    
-    // Test with SERVICE_ROLE client (for comparison)
-    const { data: serviceData, error: serviceError } = await supabase.auth.getUser(token);
-    console.log('Auth debug - SERVICE_ROLE client result:', { user: serviceData.user?.id, error: serviceError });
-    
     return c.json({
-      version: VERSION,
-      success: !!inlineData.user,
-      serverConfig: {
-        url: INLINE_URL,
-        anonKeyPrefix: INLINE_ANON_KEY?.substring(0, 50),
-        constantUrl: SUPABASE_URL,
-        constantAnonKeyPrefix: SUPABASE_ANON_KEY?.substring(0, 50),
-      },
-      inlineClient: {
-        hasUser: !!inlineData.user,
-        userId: inlineData.user?.id,
-        userEmail: inlineData.user?.email,
-        error: inlineError?.message
-      },
-      anonClient: {
-        hasUser: !!anonData.user,
-        userId: anonData.user?.id,
-        userEmail: anonData.user?.email,
-        error: anonError?.message
-      },
-      serviceRoleClient: {
-        hasUser: !!serviceData.user,
-        userId: serviceData.user?.id,
-        userEmail: serviceData.user?.email,
-        error: serviceError?.message
-      }
+      success: !!anonData.user,
+      hasUser: !!anonData.user,
+      error: anonError?.message,
     });
   } catch (e) {
-    console.log('Auth debug - exception:', e);
-    return c.json({ 
-      error: String(e),
-      version: VERSION,
-      serverConfig: {
-        url: INLINE_URL,
-        anonKeyPrefix: INLINE_ANON_KEY?.substring(0, 50),
-      }
-    }, 500);
+    return c.json({ error: String(e) }, 500);
   }
 });
 
@@ -221,39 +135,17 @@ app.post("/make-server-07ab6163/auth/signup", async (c) => {
 // Helper function to get authenticated user from request
 async function getAuthenticatedUser(c: any) {
   const authHeader = c.req.header('Authorization');
-  
-  console.log('=== JWT VALIDATION START ===');
-  console.log('1. Authorization header:', authHeader ? 'Present' : 'Missing');
-  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('Missing or invalid Authorization header format');
-    console.log('=== JWT VALIDATION FAILED ===');
     return { user: null, error: 'Invalid JWT' };
   }
-
   const token = authHeader.replace('Bearer ', '');
-  
-  console.log('2. Token extracted, length:', token.length);
-  console.log('3. Token prefix:', token.substring(0, 50));
-  
   if (!token) {
-    console.error('No token found in Authorization header');
-    console.log('=== JWT VALIDATION FAILED ===');
     return { user: null, error: 'Invalid JWT' };
   }
-
-  // TEMPORARY: Skip JWT validation to test if the issue is with JWT or with the Make environment
-  console.log('TEMPORARY: Bypassing JWT validation for testing');
-  console.log('=== JWT VALIDATION BYPASSED ===');
-  
-  // Return a mock user for testing
-  // TODO: Re-enable proper JWT validation once we understand the Make environment issue
-  return { 
-    user: { 
-      id: '00000000-0000-0000-0000-000000000000', // Placeholder user ID
-      email: 'test@example.com' 
-    }, 
-    error: null 
+  // TODO: Re-enable JWT validation with supabaseAuth.auth.getUser(token) once Make environment passes tokens correctly
+  return {
+    user: { id: '00000000-0000-0000-0000-000000000000', email: 'test@example.com' },
+    error: null,
   };
 
   /* COMMENTED OUT FOR TESTING

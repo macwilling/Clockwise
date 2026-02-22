@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
-import type { Invoice, Client, UserSettings } from '../contexts/DataContext';
+import type { Invoice, Client, UserSettings } from '../types/data';
 
 interface GenerateInvoicePDFOptions {
   invoice: Invoice;
@@ -41,8 +41,8 @@ export const generateInvoicePDF = ({
   const pageHeight = doc.internal.pageSize.getHeight();
 
   // Use settings or fallback to defaults
-  const headerColor = settings?.pdfHeaderColor ? hexToRgb(settings.pdfHeaderColor) : [15, 40, 71]; // #0F2847
-  const accentColor = settings?.pdfAccentColor ? hexToRgb(settings.pdfAccentColor) : [0, 163, 224]; // #00a3e0
+  const headerColor: [number, number, number] = settings?.pdfHeaderColor ? hexToRgb(settings.pdfHeaderColor) : [15, 40, 71]; // #0F2847
+  const accentColor: [number, number, number] = settings?.pdfAccentColor ? hexToRgb(settings.pdfAccentColor) : [0, 163, 224]; // #00a3e0
   const darkGray: [number, number, number] = [64, 64, 64];
   const mediumGray: [number, number, number] = [107, 114, 128];
 
@@ -225,7 +225,8 @@ export const generateInvoicePDF = ({
   });
 
   // Calculate totals position
-  let currentY = (doc as any).lastAutoTable.finalY + 12;
+  const lastTable = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable;
+  let currentY = (lastTable?.finalY ?? 0) + 12;
 
   // Totals section
   const totalsX = pageWidth - margin - 60;

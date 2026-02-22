@@ -26,7 +26,7 @@ export const InvoiceList = ({ filter, onSelectInvoice }: InvoiceListProps) => {
     if (invoice.status === 'draft') return 'draft';
     
     const dueDate = parseISO(invoice.dueDate);
-    if (isPast(dueDate) && invoice.status !== 'paid') {
+    if (isPast(dueDate)) {
       return 'overdue';
     }
     

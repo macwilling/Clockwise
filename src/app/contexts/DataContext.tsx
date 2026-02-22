@@ -1,119 +1,29 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { toast } from 'sonner';
+import type {
+  TimeEntry,
+  Client,
+  Invoice,
+  InvoiceLineItem,
+  InvoiceEmailHistory,
+  UserSettings,
+  DataContextType,
+} from '../types/data';
+import {
+  mapClientRow,
+  mapTimeEntryRow,
+  mapInvoiceRow,
+  mapSettingsRow,
+  mapEmailHistoryRow,
+  type SupabaseClientRow,
+  type SupabaseTimeEntryRow,
+  type SupabaseInvoiceRow,
+  type SupabaseSettingsRow,
+  type SupabaseInvoiceEmailHistoryRow,
+} from '../utils/supabaseMappers';
 
-// Types
-export interface TimeEntry {
-  id: string;
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:MM
-  endTime: string; // HH:MM
-  clientId: string;
-  project: string;
-  description: string;
-  hours: number;
-  invoiceId?: string | null; // ID of invoice this entry is included in, if any
-}
-
-export interface Client {
-  id: string;
-  name: string;
-  billingFirstName: string;
-  billingLastName: string;
-  billingPhone: string;
-  billingEmail: string;
-  ccEmails: string[]; // Multiple CC emails
-  addressStreet: string;
-  addressLine2: string;
-  addressCity: string;
-  addressState: string;
-  addressZip: string;
-  addressCountry: string;
-  hourlyRate: number;
-  color: string; // hex color for calendar blocks
-}
-
-export interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  clientId: string;
-  dateIssued: string;
-  dueDate: string;
-  status: 'draft' | 'sent' | 'paid' | 'overdue';
-  lineItems: InvoiceLineItem[];
-  total: number;
-  lastSentAt?: string; // ISO timestamp of last email send
-  sentCount?: number; // Number of times email was sent
-  emailHistory?: InvoiceEmailHistory[]; // History of all email sends
-}
-
-export interface InvoiceEmailHistory {
-  id: string;
-  sentAt: string; // ISO timestamp
-  sentTo: string; // Primary recipient email
-  ccEmails?: string[]; // CC recipients
-  customMessage?: string; // Custom message included
-}
-
-export interface InvoiceLineItem {
-  id: string;
-  date: string;
-  description: string;
-  hours: number;
-  rate: number;
-  subtotal: number;
-  timeEntryId?: string;
-}
-
-interface DataContextType {
-  timeEntries: TimeEntry[];
-  clients: Client[];
-  invoices: Invoice[];
-  settings: UserSettings | null;
-  addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void;
-  updateTimeEntry: (id: string, entry: Partial<TimeEntry>) => void;
-  deleteTimeEntry: (id: string) => void;
-  addClient: (client: Omit<Client, 'id'>) => void;
-  updateClient: (id: string, client: Partial<Client>) => void;
-  addInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNumber'>) => void;
-  updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
-  deleteInvoice: (id: string) => void;
-  updateSettings: (settings: Partial<UserSettings>) => void;
-  getUninvoicedEntries: (clientId: string, beforeDate?: string) => TimeEntry[];
-}
-
-export interface UserSettings {
-  companyName: string;
-  companyAddress: string;
-  companyPhone: string;
-  companyEmail: string;
-  companyWebsite: string;
-  // Email configuration
-  emailPrimaryColor?: string; // Hex color for email header/accents
-  emailDefaultMessage?: string; // Default message with merge fields
-  emailFooter?: string; // Footer text for emails
-  emailIncludePdf?: boolean; // Whether to attach PDF
-  emailIncludeLineItems?: boolean; // Whether to show line items in email body
-  // PDF Invoice Customization
-  pdfHeaderColor?: string; // Header/primary color (default: #0F2847 - Deep Navy)
-  pdfAccentColor?: string; // Accent color for highlights (default: #00a3e0 - Vibrant Teal)
-  pdfInvoiceTitle?: string; // Main invoice title (default: "INVOICE")
-  pdfBillToLabel?: string; // "Bill To" label (default: "BILL TO")
-  pdfDateIssuedLabel?: string; // Date issued label (default: "Date Issued")
-  pdfDueDateLabel?: string; // Due date label (default: "Due Date")
-  pdfDateColumnLabel?: string; // Table date column (default: "Date")
-  pdfDescriptionColumnLabel?: string; // Table description column (default: "Description")
-  pdfHoursColumnLabel?: string; // Table hours column (default: "Hours")
-  pdfRateColumnLabel?: string; // Table rate column (default: "Rate")
-  pdfAmountColumnLabel?: string; // Table amount column (default: "Amount")
-  pdfSubtotalLabel?: string; // Subtotal label (default: "Subtotal")
-  pdfTotalLabel?: string; // Total label (default: "Total")
-  pdfFooterText?: string; // Footer message (default: "Thank you for your business")
-  pdfTerms?: string; // Terms and conditions text
-  pdfPaymentInstructions?: string; // Payment instructions text
-  pdfShowTerms?: boolean; // Whether to show terms section
-  pdfShowPaymentInstructions?: boolean; // Whether to show payment instructions
-}
+export type { TimeEntry, Client, Invoice, InvoiceLineItem, InvoiceEmailHistory, UserSettings };
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -185,10 +95,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadData = async () => {
       try {
         setLoading(true);
-        
-        console.log('Loading data from Supabase...');
-        
-        // Fetch all data from Supabase (no auth, single-user app)
         const [clientsRes, entriesRes, invoicesRes, settingsRes] = await Promise.all([
           supabase.from('clients').select('*').order('name', { ascending: true }),
           supabase.from('time_entries').select('*').order('date', { ascending: false }),
@@ -196,126 +102,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           supabase.from('user_settings').select('*').limit(1).single(),
         ]);
 
-        console.log('Supabase responses:', {
-          clients: { data: clientsRes.data?.length, error: clientsRes.error },
-          entries: { data: entriesRes.data?.length, error: entriesRes.error },
-          invoices: { data: invoicesRes.data?.length, error: invoicesRes.error },
-          settings: { data: !!settingsRes.data, error: settingsRes.error },
-        });
-
-        // Transform clients from snake_case to camelCase
-        const fetchedClients = (clientsRes.data || []).map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          billingFirstName: row.billing_first_name,
-          billingLastName: row.billing_last_name,
-          billingPhone: row.billing_phone,
-          billingEmail: row.billing_email,
-          ccEmails: row.cc_emails || [],
-          addressStreet: row.address_street,
-          addressLine2: row.address_line_2,
-          addressCity: row.address_city,
-          addressState: row.address_state,
-          addressZip: row.address_zip,
-          addressCountry: row.address_country,
-          hourlyRate: row.hourly_rate,
-          color: row.color,
-        }));
-
-        // Transform time entries
-        const fetchedEntries = (entriesRes.data || []).map((row: any) => ({
-          id: row.id,
-          clientId: row.client_id,
-          date: row.date,
-          startTime: row.start_time.substring(0, 5), // Strip seconds from HH:MM:SS
-          endTime: row.end_time.substring(0, 5), // Strip seconds from HH:MM:SS
-          hours: parseFloat(row.hours),
-          project: row.project,
-          description: row.description,
-          invoiceId: row.invoice_id || null,
-        }));
-
-        // Transform invoices
-        const fetchedInvoices = (invoicesRes.data || []).map((row: any) => ({
-          id: row.id,
-          invoiceNumber: row.invoice_number,
-          clientId: row.client_id,
-          dateIssued: row.date_issued,
-          dueDate: row.due_date,
-          status: row.status,
-          total: parseFloat(row.total),
-          lineItems: (row.invoice_line_items || []).map((item: any) => ({
-            id: item.id,
-            date: item.date,
-            description: item.description,
-            hours: parseFloat(item.hours),
-            rate: parseFloat(item.rate),
-            subtotal: parseFloat(item.subtotal),
-            timeEntryId: item.time_entry_id,
-          })),
-          lastSentAt: row.last_sent_at,
-          sentCount: row.sent_count,
-          emailHistory: (row.email_history || []).map((history: any) => ({
-            id: history.id,
-            sentAt: history.sent_at,
-            sentTo: history.sent_to,
-            ccEmails: history.cc_emails || [],
-            customMessage: history.custom_message,
-          })),
-        }));
-
-        // Transform settings
-        const fetchedSettings = settingsRes.data ? {
-          companyName: settingsRes.data.company_name || '',
-          companyAddress: settingsRes.data.company_address || '',
-          companyPhone: settingsRes.data.company_phone || '',
-          companyEmail: settingsRes.data.company_email || '',
-          companyWebsite: settingsRes.data.company_website || '',
-          emailPrimaryColor: settingsRes.data.email_primary_color || '#3b82f6',
-          emailDefaultMessage: settingsRes.data.email_default_message || '',
-          emailFooter: settingsRes.data.email_footer || '',
-          emailIncludePdf: settingsRes.data.email_include_pdf || false,
-          emailIncludeLineItems: settingsRes.data.email_include_line_items || false,
-          // PDF Invoice Customization
-          pdfHeaderColor: settingsRes.data.pdf_header_color || '#0F2847',
-          pdfAccentColor: settingsRes.data.pdf_accent_color || '#00a3e0',
-          pdfInvoiceTitle: settingsRes.data.pdf_invoice_title || 'INVOICE',
-          pdfBillToLabel: settingsRes.data.pdf_bill_to_label || 'BILL TO',
-          pdfDateIssuedLabel: settingsRes.data.pdf_date_issued_label || 'Date Issued',
-          pdfDueDateLabel: settingsRes.data.pdf_due_date_label || 'Due Date',
-          pdfDateColumnLabel: settingsRes.data.pdf_date_column_label || 'Date',
-          pdfDescriptionColumnLabel: settingsRes.data.pdf_description_column_label || 'Description',
-          pdfHoursColumnLabel: settingsRes.data.pdf_hours_column_label || 'Hours',
-          pdfRateColumnLabel: settingsRes.data.pdf_rate_column_label || 'Rate',
-          pdfAmountColumnLabel: settingsRes.data.pdf_amount_column_label || 'Amount',
-          pdfSubtotalLabel: settingsRes.data.pdf_subtotal_label || 'Subtotal',
-          pdfTotalLabel: settingsRes.data.pdf_total_label || 'Total',
-          pdfFooterText: settingsRes.data.pdf_footer_text || 'Thank you for your business',
-          pdfTerms: settingsRes.data.pdf_terms || '',
-          pdfPaymentInstructions: settingsRes.data.pdf_payment_instructions || '',
-          pdfShowTerms: settingsRes.data.pdf_show_terms || false,
-          pdfShowPaymentInstructions: settingsRes.data.pdf_show_payment_instructions || false,
-        } : null;
-
-        console.log('Loaded data:', { 
-          clients: fetchedClients.length, 
-          entries: fetchedEntries.length, 
-          invoices: fetchedInvoices.length,
-          settings: !!fetchedSettings 
-        });
+        const fetchedClients = (clientsRes.data || []).map((row) => mapClientRow(row as SupabaseClientRow));
+        const fetchedEntries = (entriesRes.data || []).map((row) => mapTimeEntryRow(row as SupabaseTimeEntryRow));
+        const fetchedInvoices = (invoicesRes.data || []).map((row) => mapInvoiceRow(row as SupabaseInvoiceRow));
+        const fetchedSettings = settingsRes.data ? mapSettingsRow(settingsRes.data as SupabaseSettingsRow) : null;
 
         setClients(fetchedClients);
         setTimeEntries(fetchedEntries);
         setInvoices(fetchedInvoices);
         setSettings(fetchedSettings);
 
-        // If no data exists, initialize with sample data
         if (fetchedClients.length === 0 && fetchedEntries.length === 0 && fetchedInvoices.length === 0) {
-          console.log('No data found, initializing with sample clients...');
           const { clients: sampleClients } = generateSampleData();
-
-          // Insert sample clients
-          const clientsToInsert = sampleClients.map(client => ({
+          const clientsToInsert = sampleClients.map((client) => ({
             name: client.name,
             billing_first_name: client.billingFirstName,
             billing_last_name: client.billingLastName,
@@ -338,25 +137,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .select();
 
           if (!insertError && insertedClients) {
-            const transformedClients = insertedClients.map((row: any) => ({
-              id: row.id,
-              name: row.name,
-              billingFirstName: row.billing_first_name,
-              billingLastName: row.billing_last_name,
-              billingPhone: row.billing_phone,
-              billingEmail: row.billing_email,
-              ccEmails: row.cc_emails || [],
-              addressStreet: row.address_street,
-              addressLine2: row.address_line_2,
-              addressCity: row.address_city,
-              addressState: row.address_state,
-              addressZip: row.address_zip,
-              addressCountry: row.address_country,
-              hourlyRate: row.hourly_rate,
-              color: row.color,
-            }));
+            const transformedClients = insertedClients.map((row) => mapClientRow(row as SupabaseClientRow));
             setClients(transformedClients);
-            console.log('Sample clients created:', transformedClients.length);
             toast.success('Welcome! Sample clients have been created for you.');
           }
         }
@@ -416,7 +198,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTimeEntry = async (id: string, entry: Partial<TimeEntry>) => {
     try {
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (entry.clientId !== undefined) updateData.client_id = entry.clientId;
       if (entry.date !== undefined) updateData.date = entry.date;
       if (entry.startTime !== undefined) updateData.start_time = entry.startTime;
@@ -510,7 +292,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateClient = async (id: string, client: Partial<Client>) => {
     try {
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (client.name !== undefined) updateData.name = client.name;
       if (client.billingFirstName !== undefined) updateData.billing_first_name = client.billingFirstName;
       if (client.billingLastName !== undefined) updateData.billing_last_name = client.billingLastName;
@@ -611,13 +393,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           })),
           lastSentAt: invoiceData.last_sent_at,
           sentCount: invoiceData.sent_count,
-          emailHistory: (invoiceData.email_history || []).map((history: any) => ({
-            id: history.id,
-            sentAt: history.sent_at,
-            sentTo: history.sent_to,
-            ccEmails: history.cc_emails || [],
-            customMessage: history.custom_message,
-          })),
+          emailHistory: (invoiceData.email_history || []).map((h: SupabaseInvoiceEmailHistoryRow) => mapEmailHistoryRow(h)),
         };
 
         setInvoices((prev) => [newInvoice, ...prev]);
@@ -632,7 +408,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateInvoice = async (id: string, invoice: Partial<Invoice>) => {
     try {
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (invoice.invoiceNumber !== undefined) updateData.invoice_number = invoice.invoiceNumber;
       if (invoice.clientId !== undefined) updateData.client_id = invoice.clientId;
       if (invoice.dateIssued !== undefined) updateData.date_issued = invoice.dateIssued;
@@ -694,7 +470,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateSettings = async (settingsUpdate: Partial<UserSettings>) => {
     try {
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (settingsUpdate.companyName !== undefined) updateData.company_name = settingsUpdate.companyName;
       if (settingsUpdate.companyAddress !== undefined) updateData.company_address = settingsUpdate.companyAddress;
       if (settingsUpdate.companyPhone !== undefined) updateData.company_phone = settingsUpdate.companyPhone;
@@ -754,37 +530,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (result.error) throw result.error;
       }
 
-      const updatedSettings: UserSettings = {
-        companyName: data.company_name || '',
-        companyAddress: data.company_address || '',
-        companyPhone: data.company_phone || '',
-        companyEmail: data.company_email || '',
-        companyWebsite: data.company_website || '',
-        emailPrimaryColor: data.email_primary_color || '#3b82f6',
-        emailDefaultMessage: data.email_default_message || '',
-        emailFooter: data.email_footer || '',
-        emailIncludePdf: data.email_include_pdf || false,
-        emailIncludeLineItems: data.email_include_line_items || false,
-        // PDF Invoice Customization
-        pdfHeaderColor: data.pdf_header_color || '#0F2847',
-        pdfAccentColor: data.pdf_accent_color || '#00a3e0',
-        pdfInvoiceTitle: data.pdf_invoice_title || 'INVOICE',
-        pdfBillToLabel: data.pdf_bill_to_label || 'BILL TO',
-        pdfDateIssuedLabel: data.pdf_date_issued_label || 'Date Issued',
-        pdfDueDateLabel: data.pdf_due_date_label || 'Due Date',
-        pdfDateColumnLabel: data.pdf_date_column_label || 'Date',
-        pdfDescriptionColumnLabel: data.pdf_description_column_label || 'Description',
-        pdfHoursColumnLabel: data.pdf_hours_column_label || 'Hours',
-        pdfRateColumnLabel: data.pdf_rate_column_label || 'Rate',
-        pdfAmountColumnLabel: data.pdf_amount_column_label || 'Amount',
-        pdfSubtotalLabel: data.pdf_subtotal_label || 'Subtotal',
-        pdfTotalLabel: data.pdf_total_label || 'Total',
-        pdfFooterText: data.pdf_footer_text || 'Thank you for your business',
-        pdfTerms: data.pdf_terms || '',
-        pdfPaymentInstructions: data.pdf_payment_instructions || '',
-        pdfShowTerms: data.pdf_show_terms || false,
-        pdfShowPaymentInstructions: data.pdf_show_payment_instructions || false,
-      };
+      const updatedSettings = mapSettingsRow(data as SupabaseSettingsRow);
 
       setSettings(updatedSettings);
       toast.success('Settings updated');
