@@ -1,0 +1,36 @@
+  <div class="content">
+    <div class="message">
+      <p>${emailMessage}</p>
+    </div>
+    
+    <div class="invoice-details">
+      <table>
+        <tr>
+          <td>Invoice Number:</td>
+          <td>${invoiceData.invoice_number}</td>
+        </tr>
+        <tr>
+          <td>Issue Date:</td>
+          <td>${new Date(invoiceData.date_issued).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+        </tr>
+        <tr>
+          <td>Due Date:</td>
+          <td>${new Date(invoiceData.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+        </tr>
+        <tr class="total-row">
+          <td>Total Amount:</td>
+          <td class="total-amount">$${parseFloat(invoiceData.total).toFixed(2)}</td>
+        </tr>
+      </table>
+    </div>
+    
+    ${lineItemsHtml}
+    
+    <div style="text-align: center;">
+      <a href="${invoiceUrl}" class="cta-button">View Invoice Online</a>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>${emailFooter}</p>
+  </div>
