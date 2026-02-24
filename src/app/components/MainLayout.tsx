@@ -1,7 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router';
-import { Clock, FileText, LayoutDashboard, Users, ChevronLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
+import { Clock, FileText, LayoutDashboard, Users, ChevronLeft, ChevronRight, Settings as SettingsIcon, LogOut } from 'lucide-react';
 import { cn } from './ui/utils';
 import { useState } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { toast } from 'sonner';
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -13,6 +15,14 @@ const navigation = [
 export const MainLayout = () => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error('Failed to sign out');
+    }
+    // onAuthStateChange in App.tsx will clear the session and redirect to /login
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -80,6 +90,19 @@ export const MainLayout = () => {
             <SettingsIcon className="w-5 h-5" />
             {!isCollapsed && <span className="text-sm">Settings</span>}
           </Link>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "w-full flex items-center gap-2 px-4 py-2 rounded-lg text-slate-300 hover:bg-red-900 hover:text-white transition-colors",
+              isCollapsed && "justify-center px-2"
+            )}
+            title={isCollapsed ? "Sign out" : undefined}
+          >
+            <LogOut className="w-5 h-5" />
+            {!isCollapsed && <span className="text-sm">Sign Out</span>}
+          </button>
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}

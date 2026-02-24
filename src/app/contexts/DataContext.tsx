@@ -156,6 +156,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addTimeEntry = async (entry: Omit<TimeEntry, 'id'>) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('time_entries')
         .insert([{
@@ -166,6 +167,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           hours: entry.hours,
           project: entry.project,
           description: entry.description,
+          user_id: user?.id,
         }])
         .select()
         .single();
@@ -241,6 +243,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addClient = async (client: Omit<Client, 'id'>) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('clients')
         .insert([{
@@ -258,6 +261,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           address_country: client.addressCountry,
           hourly_rate: client.hourlyRate,
           color: client.color,
+          user_id: user?.id,
         }])
         .select()
         .single();
@@ -340,6 +344,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const invoiceNumber = `INV-${currentYear}-${String(nextNumber).padStart(3, '0')}`;
 
+      const { data: { user } } = await supabase.auth.getUser();
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .insert([{
@@ -349,6 +354,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           due_date: invoice.dueDate,
           status: invoice.status,
           total: invoice.total,
+          user_id: user?.id,
         }])
         .select()
         .single();
@@ -520,10 +526,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data = result.data;
         if (result.error) throw result.error;
       } else {
-        // Insert new
+        // Insert new — include user_id so the RLS WITH CHECK policy passes
+        const { data: { user } } = await supabase.auth.getUser();
         const result = await supabase
           .from('user_settings')
-          .insert([updateData])
+          .insert([{ ...updateData, user_id: user?.id }])
           .select()
           .single();
         data = result.data;
