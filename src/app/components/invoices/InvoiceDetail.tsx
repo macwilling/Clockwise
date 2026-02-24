@@ -12,7 +12,7 @@ import {
   TableRow,
   TableFooter,
 } from '../ui/table';
-import { Send, Check, Download, Trash2, FileText, Mail, ExternalLink } from 'lucide-react';
+import { Send, Check, Download, Trash2, Mail, ExternalLink, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../ui/utils';
 import { downloadInvoicePDF } from '../../utils/generateInvoicePDF';
@@ -20,6 +20,8 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { projectId, publicAnonKey } from '../../../config/supabase';
 
 interface InvoiceDetailProps {
@@ -27,11 +29,34 @@ interface InvoiceDetailProps {
   onClose: () => void;
 }
 
+const PAYMENT_METHODS = [
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'check', label: 'Check' },
+  { value: 'paypal', label: 'PayPal' },
+  { value: 'venmo', label: 'Venmo' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'other', label: 'Other' },
+];
+
+const formatMethod = (method?: string) => {
+  if (!method) return '';
+  return PAYMENT_METHODS.find((m) => m.value === method)?.label ?? method;
+};
+
 export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
-  const { invoices, clients, settings, updateInvoice, deleteInvoice } = useData();
+  const { invoices, clients, settings, updateInvoice, deleteInvoice, addPayment, deletePayment } = useData();
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [emailMessage, setEmailMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
   const client = invoice ? clients.find((c) => c.id === invoice.clientId) : null;
@@ -40,15 +65,18 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
     return <div className="p-6 text-center text-slate-600">Invoice not found</div>;
   }
 
+  const payments = invoice.payments ?? [];
+  const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const balance = invoice.total - amountPaid;
+
   const getInvoiceStatus = () => {
     if (invoice.status === 'paid') return 'paid';
+    if (invoice.status === 'partially_paid') return 'partially_paid';
     if (invoice.status === 'draft') return 'draft';
-    
+
     const dueDate = parseISO(invoice.dueDate);
-    if (isPast(dueDate)) {
-      return 'overdue';
-    }
-    
+    if (isPast(dueDate)) return 'overdue';
+
     return invoice.status;
   };
 
@@ -95,16 +123,23 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
   };
 
   const getStatusBadge = () => {
-    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; className?: string }> = {
       draft: { variant: 'secondary', label: 'Draft' },
       sent: { variant: 'default', label: 'Sent' },
       paid: { variant: 'outline', label: 'Paid' },
       overdue: { variant: 'destructive', label: 'Overdue' },
+      partially_paid: { variant: 'default', label: 'Partially Paid', className: 'bg-amber-100 text-amber-800 border-amber-300' },
     };
 
     const config = variants[status] || variants.draft;
     return (
-      <Badge variant={config.variant} className={cn(status === 'overdue' && 'bg-red-100 text-red-800 border-red-300')}>
+      <Badge
+        variant={config.variant}
+        className={cn(
+          status === 'overdue' && 'bg-red-100 text-red-800 border-red-300',
+          config.className,
+        )}
+      >
         {config.label}
       </Badge>
     );
@@ -113,7 +148,7 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
   const handleSendEmail = async () => {
     try {
       setSending(true);
-      
+
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-07ab6163/invoices/${invoiceId}/send`,
         {
@@ -132,7 +167,6 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
         throw new Error(result.error || 'Failed to send email');
       }
 
-      // Create new email history entry
       const newHistoryEntry = {
         id: crypto.randomUUID(),
         sentAt: new Date().toISOString(),
@@ -141,13 +175,12 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
         customMessage: emailMessage || undefined,
       };
 
-      // Update the invoice with new history
       const updatedEmailHistory = [
         ...(invoice.emailHistory || []),
         newHistoryEntry,
       ];
 
-      updateInvoice(invoiceId, { 
+      updateInvoice(invoiceId, {
         status: 'sent',
         lastSentAt: new Date().toISOString(),
         sentCount: (invoice.sentCount || 0) + 1,
@@ -162,6 +195,44 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
       toast.error(error instanceof Error ? error.message : 'Failed to send invoice email');
     } finally {
       setSending(false);
+    }
+  };
+
+  const openPaymentDialog = () => {
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentAmount(balance > 0 ? balance.toFixed(2) : '');
+    setPaymentMethod('');
+    setPaymentReference('');
+    setPaymentNotes('');
+    setIsPaymentDialogOpen(true);
+  };
+
+  const handleRecordPayment = async () => {
+    const amount = parseFloat(paymentAmount);
+    if (!paymentDate || isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid date and amount');
+      return;
+    }
+    try {
+      setSavingPayment(true);
+      await addPayment(invoiceId, {
+        date: paymentDate,
+        amount,
+        method: paymentMethod || undefined,
+        reference: paymentReference || undefined,
+        notes: paymentNotes || undefined,
+      });
+      setIsPaymentDialogOpen(false);
+    } catch {
+      // error toast handled in addPayment
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    if (confirm('Remove this payment record?')) {
+      deletePayment(paymentId, invoiceId);
     }
   };
 
@@ -184,6 +255,12 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
             <Button variant="outline" size="sm" onClick={handleMarkAsPaid}>
               <Check className="w-4 h-4 mr-2" />
               Mark as Paid
+            </Button>
+          )}
+          {status !== 'draft' && (
+            <Button variant="outline" size="sm" onClick={openPaymentDialog}>
+              <DollarSign className="w-4 h-4 mr-2" />
+              Record Payment
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
@@ -290,7 +367,7 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
           <TableFooter>
             <TableRow>
               <TableCell colSpan={4} className="text-right font-semibold">
-                Total
+                Invoice Total
               </TableCell>
               <TableCell className="text-right">
                 <span className="text-xl font-bold text-blue-600">
@@ -298,9 +375,79 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
                 </span>
               </TableCell>
             </TableRow>
+            {amountPaid > 0 && (
+              <>
+                <TableRow>
+                  <TableCell colSpan={4} className="text-right text-slate-600">
+                    Amount Paid
+                  </TableCell>
+                  <TableCell className="text-right text-green-600 font-semibold">
+                    ${amountPaid.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} className="text-right font-semibold">
+                    Balance Due
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={cn('font-bold', balance <= 0 ? 'text-green-600' : 'text-slate-900')}>
+                      ${Math.max(balance, 0).toFixed(2)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              </>
+            )}
           </TableFooter>
         </Table>
       </Card>
+
+      {/* Payment History */}
+      {payments.length > 0 && (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Payment History</h3>
+          <div className="space-y-4">
+            {payments.slice().reverse().map((payment) => (
+              <div key={payment.id} className="border-l-4 border-green-500 pl-4 py-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-green-600" />
+                      <span className="font-semibold text-slate-900">
+                        ${payment.amount.toFixed(2)}
+                      </span>
+                      <span className="text-sm text-slate-500">
+                        on {format(parseISO(payment.date), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600 space-y-0.5">
+                      {payment.method && (
+                        <p><span className="font-medium">Method:</span> {formatMethod(payment.method)}</p>
+                      )}
+                      {payment.reference && (
+                        <p><span className="font-medium">Reference:</span> {payment.reference}</p>
+                      )}
+                      {payment.notes && (
+                        <div className="mt-2 p-3 bg-slate-50 rounded-md">
+                          <p className="text-xs font-medium text-slate-500 uppercase mb-1">Notes</p>
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{payment.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-600 ml-2"
+                    onClick={() => handleDeletePayment(payment.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Email History */}
       {invoice.emailHistory && invoice.emailHistory.length > 0 && (
@@ -343,6 +490,96 @@ export const InvoiceDetail = ({ invoiceId, onClose }: InvoiceDetailProps) => {
           </div>
         </Card>
       )}
+
+      {/* Record Payment Dialog */}
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Log a payment received for {invoice.invoiceNumber}.
+              {balance > 0 && ` Balance due: $${balance.toFixed(2)}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="paymentDate">Date Received</Label>
+                <Input
+                  id="paymentDate"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="paymentAmount">Amount</Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0.00"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="paymentMethod">Payment Method (Optional)</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger id="paymentMethod" className="mt-1">
+                  <SelectValue placeholder="Select method…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="paymentReference">Reference / Memo (Optional)</Label>
+              <Input
+                id="paymentReference"
+                placeholder="Check #, transaction ID, etc."
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="paymentNotes">Notes (Optional)</Label>
+              <Textarea
+                id="paymentNotes"
+                placeholder="Any additional notes…"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                className="mt-1 h-20"
+              />
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsPaymentDialogOpen(false)}
+              disabled={savingPayment}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRecordPayment}
+              disabled={savingPayment}
+            >
+              {savingPayment ? 'Saving…' : 'Record Payment'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Email Dialog */}
       <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>

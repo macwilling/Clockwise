@@ -1,4 +1,4 @@
-import type { Client, TimeEntry, Invoice, InvoiceLineItem, InvoiceEmailHistory, UserSettings } from '../types/data';
+import type { Client, TimeEntry, Invoice, InvoiceLineItem, InvoiceEmailHistory, Payment, UserSettings } from '../types/data';
 
 export interface SupabaseClientRow {
   id: string;
@@ -60,6 +60,17 @@ export interface SupabaseInvoiceRow {
   sent_count?: number | null;
   email_history?: SupabaseInvoiceEmailHistoryRow[] | null;
   invoice_line_items?: SupabaseInvoiceLineItemRow[] | null;
+}
+
+export interface SupabasePaymentRow {
+  id: string;
+  invoice_id: string;
+  date: string;
+  amount: number;
+  method?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  created_at: string;
 }
 
 export interface SupabaseSettingsRow {
@@ -146,6 +157,19 @@ export function mapEmailHistoryRow(history: SupabaseInvoiceEmailHistoryRow): Inv
     sentTo: history.sent_to,
     ccEmails: history.cc_emails ?? [],
     customMessage: history.custom_message ?? undefined,
+  };
+}
+
+export function mapPaymentRow(row: SupabasePaymentRow): Payment {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    date: row.date,
+    amount: parseFloat(String(row.amount)),
+    method: row.method ?? undefined,
+    reference: row.reference ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
   };
 }
 

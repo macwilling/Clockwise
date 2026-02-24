@@ -46,18 +46,30 @@ export interface InvoiceEmailHistory {
   customMessage?: string;
 }
 
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  method?: string;
+  reference?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
   clientId: string;
   dateIssued: string;
   dueDate: string;
-  status: 'draft' | 'sent' | 'paid' | 'overdue';
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'partially_paid';
   lineItems: InvoiceLineItem[];
   total: number;
   lastSentAt?: string;
   sentCount?: number;
   emailHistory?: InvoiceEmailHistory[];
+  payments?: Payment[];
 }
 
 export interface UserSettings {
@@ -106,4 +118,6 @@ export interface DataContextType {
   deleteInvoice: (id: string) => void;
   updateSettings: (settings: Partial<UserSettings>) => void;
   getUninvoicedEntries: (clientId: string, beforeDate?: string) => TimeEntry[];
+  addPayment: (invoiceId: string, payment: Omit<Payment, 'id' | 'invoiceId' | 'createdAt'>) => Promise<void>;
+  deletePayment: (paymentId: string, invoiceId: string) => Promise<void>;
 }

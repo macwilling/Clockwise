@@ -35,6 +35,7 @@ export const InvoicesView = () => {
           <TabsTrigger value="all">All Invoices</TabsTrigger>
           <TabsTrigger value="draft">Draft</TabsTrigger>
           <TabsTrigger value="sent">Sent</TabsTrigger>
+          <TabsTrigger value="partially_paid">Partially Paid</TabsTrigger>
           <TabsTrigger value="paid">Paid</TabsTrigger>
           <TabsTrigger value="overdue">Overdue</TabsTrigger>
         </TabsList>
@@ -54,6 +55,12 @@ export const InvoicesView = () => {
         <TabsContent value="sent">
           <InvoiceList
             filter="sent"
+            onSelectInvoice={(id) => setSelectedInvoiceId(id)}
+          />
+        </TabsContent>
+        <TabsContent value="partially_paid">
+          <InvoiceList
+            filter="partially_paid"
             onSelectInvoice={(id) => setSelectedInvoiceId(id)}
           />
         </TabsContent>
