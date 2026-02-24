@@ -7,6 +7,7 @@ import type {
   Invoice,
   InvoiceLineItem,
   InvoiceEmailHistory,
+  Payment,
   UserSettings,
   DataContextType,
 } from '../types/data';
@@ -14,16 +15,18 @@ import {
   mapClientRow,
   mapTimeEntryRow,
   mapInvoiceRow,
+  mapPaymentRow,
   mapSettingsRow,
   mapEmailHistoryRow,
   type SupabaseClientRow,
   type SupabaseTimeEntryRow,
   type SupabaseInvoiceRow,
+  type SupabasePaymentRow,
   type SupabaseSettingsRow,
   type SupabaseInvoiceEmailHistoryRow,
 } from '../utils/supabaseMappers';
 
-export type { TimeEntry, Client, Invoice, InvoiceLineItem, InvoiceEmailHistory, UserSettings };
+export type { TimeEntry, Client, Invoice, InvoiceLineItem, InvoiceEmailHistory, Payment, UserSettings };
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -95,16 +98,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadData = async () => {
       try {
         setLoading(true);
-        const [clientsRes, entriesRes, invoicesRes, settingsRes] = await Promise.all([
+        const [clientsRes, entriesRes, invoicesRes, paymentsRes, settingsRes] = await Promise.all([
           supabase.from('clients').select('*').order('name', { ascending: true }),
           supabase.from('time_entries').select('*').order('date', { ascending: false }),
           supabase.from('invoices').select('*, invoice_line_items(*)').order('date_issued', { ascending: false }),
+          supabase.from('payments').select('*').order('date', { ascending: true }),
           supabase.from('user_settings').select('*').limit(1).single(),
         ]);
 
         const fetchedClients = (clientsRes.data || []).map((row) => mapClientRow(row as SupabaseClientRow));
         const fetchedEntries = (entriesRes.data || []).map((row) => mapTimeEntryRow(row as SupabaseTimeEntryRow));
-        const fetchedInvoices = (invoicesRes.data || []).map((row) => mapInvoiceRow(row as SupabaseInvoiceRow));
+        const fetchedPayments = (paymentsRes.data || []).map((row) => mapPaymentRow(row as SupabasePaymentRow));
+        const fetchedInvoices = (invoicesRes.data || []).map((row) => {
+          const invoice = mapInvoiceRow(row as SupabaseInvoiceRow);
+          invoice.payments = fetchedPayments.filter((p) => p.invoiceId === invoice.id);
+          return invoice;
+        });
         const fetchedSettings = settingsRes.data ? mapSettingsRow(settingsRes.data as SupabaseSettingsRow) : null;
 
         setClients(fetchedClients);
@@ -540,6 +549,88 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const recalculateInvoiceStatus = (invoice: Invoice, payments: Payment[]): Invoice['status'] => {
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (totalPaid >= invoice.total) return 'paid';
+    if (totalPaid > 0) return 'partially_paid';
+    // If all payments removed, fall back to prior non-payment status
+    if (invoice.status === 'paid' || invoice.status === 'partially_paid') return 'sent';
+    return invoice.status;
+  };
+
+  const addPayment = async (invoiceId: string, payment: Omit<Payment, 'id' | 'invoiceId' | 'createdAt'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .insert([{
+          invoice_id: invoiceId,
+          date: payment.date,
+          amount: payment.amount,
+          method: payment.method || null,
+          reference: payment.reference || null,
+          notes: payment.notes || null,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newPayment = mapPaymentRow(data as SupabasePaymentRow);
+
+      setInvoices((prev) =>
+        prev.map((inv) => {
+          if (inv.id !== invoiceId) return inv;
+          const updatedPayments = [...(inv.payments ?? []), newPayment];
+          const newStatus = recalculateInvoiceStatus(inv, updatedPayments);
+          return { ...inv, payments: updatedPayments, status: newStatus };
+        })
+      );
+
+      // Persist updated status to DB
+      const invoice = invoices.find((inv) => inv.id === invoiceId);
+      if (invoice) {
+        const updatedPayments = [...(invoice.payments ?? []), newPayment];
+        const newStatus = recalculateInvoiceStatus(invoice, updatedPayments);
+        await supabase.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+      }
+
+      toast.success('Payment recorded');
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error('Failed to record payment');
+      throw error;
+    }
+  };
+
+  const deletePayment = async (paymentId: string, invoiceId: string) => {
+    try {
+      const { error } = await supabase.from('payments').delete().eq('id', paymentId);
+      if (error) throw error;
+
+      setInvoices((prev) =>
+        prev.map((inv) => {
+          if (inv.id !== invoiceId) return inv;
+          const updatedPayments = (inv.payments ?? []).filter((p) => p.id !== paymentId);
+          const newStatus = recalculateInvoiceStatus(inv, updatedPayments);
+          return { ...inv, payments: updatedPayments, status: newStatus };
+        })
+      );
+
+      // Persist updated status to DB
+      const invoice = invoices.find((inv) => inv.id === invoiceId);
+      if (invoice) {
+        const updatedPayments = (invoice.payments ?? []).filter((p) => p.id !== paymentId);
+        const newStatus = recalculateInvoiceStatus(invoice, updatedPayments);
+        await supabase.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+      }
+
+      toast.success('Payment removed');
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast.error('Failed to remove payment');
+    }
+  };
+
   // Helper to get uninvoiced time entries for a client
   const getUninvoicedEntries = (clientId: string, beforeDate?: string): TimeEntry[] => {
     let entries = timeEntries.filter(entry => 
@@ -573,6 +664,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteInvoice,
         updateSettings,
         getUninvoicedEntries,
+        addPayment,
+        deletePayment,
       }}
     >
       {loading ? (

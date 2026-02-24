@@ -13,7 +13,7 @@ import {
 import { cn } from '../ui/utils';
 
 interface InvoiceListProps {
-  filter: 'all' | 'draft' | 'sent' | 'paid' | 'overdue';
+  filter: 'all' | 'draft' | 'sent' | 'paid' | 'overdue' | 'partially_paid';
   onSelectInvoice: (id: string) => void;
 }
 
@@ -23,13 +23,12 @@ export const InvoiceList = ({ filter, onSelectInvoice }: InvoiceListProps) => {
   // Update invoice status to overdue if past due date
   const getInvoiceStatus = (invoice: Invoice) => {
     if (invoice.status === 'paid') return 'paid';
+    if (invoice.status === 'partially_paid') return 'partially_paid';
     if (invoice.status === 'draft') return 'draft';
-    
+
     const dueDate = parseISO(invoice.dueDate);
-    if (isPast(dueDate)) {
-      return 'overdue';
-    }
-    
+    if (isPast(dueDate)) return 'overdue';
+
     return invoice.status;
   };
 
@@ -46,16 +45,23 @@ export const InvoiceList = ({ filter, onSelectInvoice }: InvoiceListProps) => {
   );
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; className?: string }> = {
       draft: { variant: 'secondary', label: 'Draft' },
       sent: { variant: 'default', label: 'Sent' },
       paid: { variant: 'outline', label: 'Paid' },
       overdue: { variant: 'destructive', label: 'Overdue' },
+      partially_paid: { variant: 'default', label: 'Partially Paid', className: 'bg-amber-100 text-amber-800 border-amber-300' },
     };
 
     const config = variants[status] || variants.draft;
     return (
-      <Badge variant={config.variant} className={cn(status === 'overdue' && 'bg-red-100 text-red-800 border-red-300')}>
+      <Badge
+        variant={config.variant}
+        className={cn(
+          status === 'overdue' && 'bg-red-100 text-red-800 border-red-300',
+          config.className,
+        )}
+      >
         {config.label}
       </Badge>
     );
@@ -105,6 +111,15 @@ export const InvoiceList = ({ filter, onSelectInvoice }: InvoiceListProps) => {
                 </TableCell>
                 <TableCell className="text-right font-semibold">
                   ${invoice.total.toFixed(2)}
+                  {status === 'partially_paid' && (() => {
+                    const paid = (invoice.payments ?? []).reduce((s, p) => s + p.amount, 0);
+                    const balance = invoice.total - paid;
+                    return (
+                      <div className="text-xs font-normal text-amber-700">
+                        ${balance.toFixed(2)} remaining
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell>{getStatusBadge(status)}</TableCell>
               </TableRow>
