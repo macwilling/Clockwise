@@ -16,6 +16,7 @@ export interface SupabaseClientRow {
   address_country: string;
   hourly_rate: number;
   color: string;
+  user_id?: string | null;
 }
 
 export interface SupabaseTimeEntryRow {
@@ -28,6 +29,7 @@ export interface SupabaseTimeEntryRow {
   project: string;
   description: string;
   invoice_id?: string | null;
+  user_id?: string | null;
 }
 
 export interface SupabaseInvoiceLineItemRow {
@@ -60,6 +62,7 @@ export interface SupabaseInvoiceRow {
   sent_count?: number | null;
   email_history?: SupabaseInvoiceEmailHistoryRow[] | null;
   invoice_line_items?: SupabaseInvoiceLineItemRow[] | null;
+  user_id?: string | null;
 }
 
 export interface SupabasePaymentRow {
@@ -74,6 +77,7 @@ export interface SupabasePaymentRow {
 }
 
 export interface SupabaseSettingsRow {
+  user_id?: string | null;
   company_name: string;
   company_address: string;
   company_phone: string;

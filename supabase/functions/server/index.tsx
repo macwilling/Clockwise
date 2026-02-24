@@ -142,59 +142,27 @@ async function getAuthenticatedUser(c: any) {
   if (!token) {
     return { user: null, error: 'Invalid JWT' };
   }
-  // TODO: Re-enable JWT validation with supabaseAuth.auth.getUser(token) once Make environment passes tokens correctly
-  return {
-    user: { id: '00000000-0000-0000-0000-000000000000', email: 'test@example.com' },
-    error: null,
-  };
 
-  /* COMMENTED OUT FOR TESTING
   try {
-    console.log('4. Validating JWT with ANON client...');
-    
-    // Use ANON client to validate the JWT - this is the correct way!
-    // User JWTs must be validated with the ANON key, not SERVICE_ROLE
+    // Use ANON client to validate the JWT — user JWTs must be validated with
+    // the ANON key, not SERVICE_ROLE.
     const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
 
-    console.log('5. Validation result:', {
-      hasUser: !!user,
-      userId: user?.id,
-      userEmail: user?.email,
-      error: error?.message,
-      errorCode: error?.status,
-      errorName: error?.name
-    });
-
     if (error) {
-      console.error('Error validating JWT:', {
-        message: error.message,
-        status: error.status,
-        name: error.name,
-        fullError: JSON.stringify(error)
-      });
-      console.log('=== JWT VALIDATION FAILED ===');
+      console.error('Error validating JWT:', error.message);
       return { user: null, error: error.message || 'Invalid JWT' };
     }
 
     if (!user) {
       console.error('No user found for JWT');
-      console.log('=== JWT VALIDATION FAILED ===');
       return { user: null, error: 'Invalid JWT' };
     }
 
-    console.log('6. Successfully validated user:', user.id);
-    console.log('=== JWT VALIDATION SUCCESS ===');
     return { user, error: null };
   } catch (error) {
-    console.error('Exception validating JWT:', {
-      error,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    console.log('=== JWT VALIDATION EXCEPTION ===');
+    console.error('Exception validating JWT:', error instanceof Error ? error.message : String(error));
     return { user: null, error: error instanceof Error ? error.message : 'Invalid JWT' };
   }
-  */
 }
 
 // ============ CLIENTS ============
